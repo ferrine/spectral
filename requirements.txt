@@ -1,0 +1,13 @@
+tabulate
+torch>=0.4.1
+torchvision
+imageio
+pandas
+tensorflow
+opencv-python
+matplotlib
+scipy
+sklearn
+joblib
+tqdm
+git+https://github.com/ferrine/exman.git#egg=exman
