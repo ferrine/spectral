@@ -2,11 +2,15 @@ import torch
 
 
 class GAN(torch.nn.Module):
-    def __init__(self, generator, discriminator, env):
+    def __init__(self, generator, discriminator):
         super().__init__()
         self.generator = generator
         self.discriminator = discriminator
-        self.env = env
+        if not discriminator.wasserstein:
+            if discriminator.logits:
+                self.bce = torch.nn.BCEWithLogitsLoss()
+            else:
+                self.bce = torch.nn.BCELoss()
 
     @property
     def wasserstein(self):

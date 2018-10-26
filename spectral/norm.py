@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional
 from torch import nn as nn
 from torch.nn.utils.spectral_norm import SpectralNorm
+import spectral
 
 
 def is_transposed(conv):
@@ -185,6 +186,37 @@ def spectral_norm(module, name="weight", n_power_iterations=1, eps=1e-12, dim=No
     return module
 
 
+def validate_mode(mode):
+    return mode in {
+        "bug",  # dense power iteration
+        "fix",  # conv power iteration
+        "bug/fix",  # scaled as fix with alpha as bug
+        "fix/bug",  # scaled as bug with alpha as fix
+        "learn/bug",  # scaled as bug with learnable alpha
+        "learn/fix",  # scaled as fix with learnable alpha
+        "",  # do nothing
+    } or (  # 0.1/bug, etc
+        len(mode.split("/")) == 2
+        and spectral.utils.isfloat(mode.split("/")[0])
+        and mode.split("/")[1] in {"", "bug", "fix"}
+    )
+
+
+def parse_mode(mode):
+    if mode in {
+        "bug",  # dense power iteration
+        "fix",  # conv power iteration
+        "bug/fix",  # scaled as fix with alpha as bug
+        "fix/bug",  # scaled as bug with alpha as fix
+        "learn/bug",  # scaled as bug with learnable alpha
+        "learn/fix",  # scaled as fix with learnable alpha
+        "",  # do nothing
+    }:
+        return None, mode
+    else:
+        return float(mode.split("/")[0]), mode.split("/")[1]
+
+
 class SmartSpectralNorm(SpectralNorm):
     def __init__(
         self,
@@ -196,16 +228,8 @@ class SmartSpectralNorm(SpectralNorm):
         strict=True,
     ):
         super().__init__(name, n_power_iterations, dim, eps)
-        assert mode in {
-            "bug",  # dense power iteration
-            "fix",  # conv power iteration
-            "bug/fix",  # scaled as fix with alpha as bug
-            "fix/bug",  # scaled as bug with alpha as fix
-            "learn/bug",  # scaled as bug with learnable alpha
-            "learn/fix",  # scaled as fix with learnable alpha
-            "",  # do nothing
-        }
-        self.mode = mode
+        assert validate_mode(mode)
+        self.alpha, self.mode = parse_mode(mode)
         self.strict = strict
         self.dense = SpectralNorm(name, n_power_iterations, dim, eps)
         self.conv = ConvSpectralNorm(name, n_power_iterations, None, eps)
@@ -271,13 +295,12 @@ class SmartSpectralNorm(SpectralNorm):
         )
         ux, vx = conv_power_iteration(weight, ux, **conv_params)
         sigma_conv = conv_sigma(weight, ux, vx, **conv_params)
-
         if self.mode == "fix":
             sigma = sigma_conv
-            alpha = 1
+            alpha = self.alpha if self.alpha is not None else 1.0
         elif self.mode == "bug":
-            sigma = sigma_dense + 1e-6
-            alpha = 1
+            sigma = sigma_dense
+            alpha = self.alpha if self.alpha is not None else 1.0
         elif self.mode == "bug/fix":
             alpha = (sigma_conv / sigma_dense).detach()  # alpha as bug
             sigma = sigma_conv  # scaled as fix

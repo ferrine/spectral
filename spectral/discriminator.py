@@ -8,20 +8,22 @@ class BaseDiscriminator(nn.Module):
         input_shape,
         wasserstein=False,
         logits=True,
-        spectral_norm=False,
-        spectral_norm_fix=False,
+        spectral_norm_kwargs=None,
         **kwargs
     ):
         super().__init__()
         self.input_shape = self.image_shape = input_shape
         self.wasserstein = wasserstein
-        self.spectral_norm = spectral_norm
-        self.spectral_norm_fix = spectral_norm_fix
+        self.spectral_norm_kwargs = spectral_norm_kwargs or dict()
         self.logits = logits
 
     @property
     def batch_norm(self):
         return not (self.wasserstein or self.spectral_norm)
+
+    @property
+    def spectral_norm(self):
+        return bool(self.spectral_norm_kwargs.get("mode", ""))
 
 
 class BaseImageDiscriminator(BaseDiscriminator):

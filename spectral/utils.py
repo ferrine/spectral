@@ -19,3 +19,11 @@ quadruple = _ntuple(4)
 
 def to_image_range(tensor):
     return tensor * 0.5 + 0.5
+
+
+def isfloat(s):
+    try:
+        float(s)
+    except ValueError:
+        return False
+    return True

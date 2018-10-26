@@ -215,6 +215,11 @@ def resnet_block(*args, transposed=False, **kwargs):
         return ResNetBlock(*args, **kwargs)
 
 
+SPECTRAL_NORM_DEFAULTS = dict(
+    mode="", strict=True, name="weight", n_power_iterations=1, eps=1e-12, dim=0
+)
+
+
 def conv2d(
     *args,
     spectral_norm=False,
@@ -243,14 +248,10 @@ def conv2d(
     if getattr(module, "bias", None) is not None:
         nn.init.zeros_(module.bias.data)
     if spectral_norm:
-        spectral_norm_kwargs_defaults = dict(
-            mode="", strict=True, name="weight", n_power_iterations=1, eps=1e-12, dim=0
-        )
         if spectral_norm_kwargs is not None:
-            spectral_norm_kwargs_defaults.update(spectral_norm_kwargs)
-        module = spectral.norm.SmartSpectralNorm.apply(
-            module, **spectral_norm_kwargs_defaults
-        )
+            sn_kw = SPECTRAL_NORM_DEFAULTS.copy()
+            sn_kw.update(spectral_norm_kwargs)
+        module = spectral.norm.SmartSpectralNorm.apply(module, **sn_kw)
     return module
 
 
