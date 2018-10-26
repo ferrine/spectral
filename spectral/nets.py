@@ -313,7 +313,7 @@ def is_conv(mod):
 class ConvSpectralNorm(SpectralNorm):
     def compute_weight(self, module):
         weight = getattr(module, self.name + "_orig")
-        u = getattr(module, self.name + "_u")
+        u = getattr(module, self.name + "_ux")
         conv_params = dict(
             padding=module.padding,
             stride=module.stride,
@@ -332,12 +332,12 @@ class ConvSpectralNorm(SpectralNorm):
         return weight, u
 
     def __call__(self, module, inputs):
-        if getattr(module, self.name + "_u") is None:
-            delattr(module, self.name + "_u")
+        if getattr(module, self.name + "_ux") is None:
+            delattr(module, self.name + "_ux")
             u = inputs[0][0][None]
             if is_transposed(module):
                 u = module.forward(u)
-            module.register_buffer(self.name + "_u", u)  # first item in batch
+            module.register_buffer(self.name + "_ux", u)  # first item in batch
         super().__call__(module, inputs)
 
     @staticmethod
@@ -346,7 +346,7 @@ class ConvSpectralNorm(SpectralNorm):
         weight = module._parameters[name]
 
         delattr(module, fn.name)
-        setattr(module, fn.name + "_u", None)
+        setattr(module, fn.name + "_ux", None)
         module.register_parameter(fn.name + "_orig", weight)
         # We still need to assign weight back as fn.name because all sorts of
         # things may assume that it exists, e.g., when initializing weights.
