@@ -9,4 +9,4 @@ except ImportError:
         "tensorflow load failed, you will probably fail to compute inception metrics"
     )
     del warnings
-from . import nets, generator, discriminator, utils
+from . import nets, generator, discriminator, utils, norm

@@ -1,9 +1,7 @@
-import torch
 import torch.nn as nn
 import numpy as np
-import torch.nn.functional
-from torch.nn.utils.spectral_norm import SpectralNorm
 import spectral
+import spectral.norm
 
 
 def conv_arithmetic(sin, pad, out_pad, stride, kernel):
@@ -223,7 +221,7 @@ def conv2d(
     transposed=False,
     init="normal",
     nonlin="relu",
-    spectral_norm_fix=False,
+    spectral_norm_kwargs=None,
     **kwargs
 ):
     if not transposed:
@@ -245,10 +243,14 @@ def conv2d(
     if getattr(module, "bias", None) is not None:
         nn.init.zeros_(module.bias.data)
     if spectral_norm:
-        if spectral_norm_fix:
-            module = spectral.nets.spectral_norm(module)
-        else:
-            module = nn.utils.spectral_norm(module)
+        spectral_norm_kwargs_defaults = dict(
+            mode="", strict=True, name="weight", n_power_iterations=1, eps=1e-12, dim=0
+        )
+        if spectral_norm_kwargs is not None:
+            spectral_norm_kwargs_defaults.update(spectral_norm_kwargs)
+        module = spectral.norm.SmartSpectralNorm.apply(
+            module, **spectral_norm_kwargs_defaults
+        )
     return module
 
 
@@ -288,171 +290,3 @@ class DataParallelWrap(nn.DataParallel):
                         + super().__getattr__("module").__class__.__name__,
                     )
                 ) from e
-
-
-def is_transposed(conv):
-    return isinstance(
-        conv, (nn.ConvTranspose1d, nn.ConvTranspose2d, nn.ConvTranspose3d)
-    )
-
-
-def is_conv(mod):
-    return isinstance(
-        mod,
-        (
-            nn.Conv1d,
-            nn.Conv2d,
-            nn.Conv3d,
-            nn.ConvTranspose1d,
-            nn.ConvTranspose2d,
-            nn.ConvTranspose3d,
-        ),
-    )
-
-
-class ConvSpectralNorm(SpectralNorm):
-    def compute_weight(self, module):
-        weight = getattr(module, self.name + "_orig")
-        u = getattr(module, self.name + "_ux")
-        conv_params = dict(
-            padding=module.padding,
-            stride=module.stride,
-            dilation=module.dilation,
-            groups=module.groups,
-        )
-        with torch.no_grad():
-            for _ in range(self.n_power_iterations):
-                # Spectral norm of weight equals to `u^T W v`, where `u` and `v`
-                # are the first left and right singular vectors.
-                # This power iteration produces approximations of `u` and `v`.
-                u, v = conv_power_iteration(weight, u, **conv_params)
-
-        sigma = conv_sigma(weight, u, v, **conv_params)
-        weight = weight / sigma
-        return weight, u
-
-    def __call__(self, module, inputs):
-        if getattr(module, self.name + "_ux") is None:
-            delattr(module, self.name + "_ux")
-            u = inputs[0][0][None]
-            if is_transposed(module):
-                u = module.forward(u)
-            module.register_buffer(self.name + "_ux", u)  # first item in batch
-        super().__call__(module, inputs)
-
-    @staticmethod
-    def apply(module, name, n_power_iterations, dim, eps):
-        fn = ConvSpectralNorm(name, n_power_iterations, None, eps)
-        weight = module._parameters[name]
-
-        delattr(module, fn.name)
-        setattr(module, fn.name + "_ux", None)
-        module.register_parameter(fn.name + "_orig", weight)
-        # We still need to assign weight back as fn.name because all sorts of
-        # things may assume that it exists, e.g., when initializing weights.
-        # However, we can't directly assign as it could be an nn.Parameter and
-        # gets added as a parameter. Instead, we register weight.data as a
-        # buffer, which will cause weight to be included in the state dict
-        # and also supports nn.init due to shared storage.
-        module.register_buffer(fn.name, weight.data)
-        module.register_forward_pre_hook(fn)
-        return fn
-
-
-def normalize(input, p=2, dim=1, eps=1e-12):
-    if dim is None:
-        return input / input.view(-1).norm(p, 0, True).clamp(min=eps).expand_as(input)
-    else:
-        return torch.nn.functional.normalize(input, p, dim, eps)
-
-
-def conv_power_iteration(
-    kernel, u, stride=1, padding=0, dilation=1, groups=1, normalize_uh=True
-):
-    convnd, deconvnd = {
-        # len of shape
-        # 1d
-        3: (torch.nn.functional.conv1d, torch.nn.functional.grad.conv1d_input),
-        # 2d
-        4: (torch.nn.functional.conv2d, torch.nn.functional.grad.conv2d_input),
-        # 3d
-        5: (torch.nn.functional.conv3d, torch.nn.functional.grad.conv3d_input),
-    }[len(kernel.shape)]
-    v = convnd(
-        u, kernel, stride=stride, padding=padding, dilation=dilation, groups=groups
-    )
-    v = normalize(v, dim=None)
-    u = deconvnd(
-        u.size(),
-        kernel,
-        v,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
-        groups=groups,
-    )
-    if normalize_uh:
-        u = normalize(u, dim=None)
-    return u, v
-
-
-def conv_sigma(kernel, u, v, stride=1, padding=0, dilation=1, groups=1):
-    convnd, deconvnd = {
-        # len of shape
-        # 1d
-        3: (torch.nn.functional.conv1d, torch.nn.functional.grad.conv1d_input),
-        # 2d
-        4: (torch.nn.functional.conv2d, torch.nn.functional.grad.conv2d_input),
-        # 3d
-        5: (torch.nn.functional.conv3d, torch.nn.functional.grad.conv3d_input),
-    }[len(kernel.shape)]
-    uh = deconvnd(
-        u.size(),
-        kernel,
-        v,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
-        groups=groups,
-    )
-    return torch.dot(u.view(-1), uh.view(-1))
-
-
-def conv_power_iteration_sigma(
-    kernel,
-    u=None,
-    u_shape=None,
-    iterations=1,
-    stride=1,
-    padding=0,
-    dilation=1,
-    groups=1,
-):
-    if (u is None) ^ (u_shape is None):
-        if u is not None:
-            pass
-        else:
-            u = kernel.new_empty(u_shape).normal_(0, 1)[None]
-            u = normalize(u, dim=None)
-    else:
-        if (u is not None) and (u_shape is not None):
-            assert len(u.shape) == (1,) + u_shape
-        else:
-            raise ValueError("need one of u or u_shape")
-    for _ in range(iterations):
-        u, v = conv_power_iteration(
-            kernel, u, stride=stride, padding=padding, dilation=dilation, groups=groups
-        )
-    return conv_sigma(
-        kernel, u, v, stride=stride, padding=padding, dilation=dilation, groups=groups
-    )
-
-
-def spectral_norm(module, name="weight", n_power_iterations=1, eps=1e-12, dim=None):
-    if is_conv(module):
-        ConvSpectralNorm.apply(module, name, n_power_iterations, dim, eps)
-    else:
-        if dim is None:
-            dim = 0
-        SpectralNorm.apply(module, name, n_power_iterations, dim, eps)
-    return module
