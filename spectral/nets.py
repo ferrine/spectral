@@ -248,10 +248,12 @@ def conv2d(
     if getattr(module, "bias", None) is not None:
         nn.init.zeros_(module.bias.data)
     if spectral_norm:
+        sn_kw = SPECTRAL_NORM_DEFAULTS.copy()
+        if isinstance(module, nn.ConvTranspose2d):
+            sn_kw["dim"] = 1
         if spectral_norm_kwargs is not None:
-            sn_kw = SPECTRAL_NORM_DEFAULTS.copy()
             sn_kw.update(spectral_norm_kwargs)
-        module = spectral.norm.SmartSpectralNorm.apply(module, **sn_kw)
+        spectral.norm.SmartSpectralNorm.apply(module, **sn_kw)
     return module
 
 

@@ -300,3 +300,9 @@ class ReconstructionDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.source)
+
+
+def endless(loader):
+    while True:
+        for item in loader:
+            yield item

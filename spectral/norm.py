@@ -241,29 +241,27 @@ class SmartSpectralNorm(SpectralNorm):
         weight = module._parameters[name]
 
         delattr(module, fn.name)
+        module.register_parameter(fn.name + "_orig", weight)
+        module.register_buffer(fn.name, weight.data)
+
+        # for conv spectral norm
         setattr(module, fn.name + "_ux", None)
-        module.register_parameter(fn.name + "_orig", weight)
-
         # regular spectral norm
-        weight = module._parameters[name]
         height = weight.size(dim)
-
         u = normalize(weight.new_empty(height).normal_(0, 1), dim=0, eps=fn.eps)
-        delattr(module, fn.name)
-        module.register_parameter(fn.name + "_orig", weight)
         # We still need to assign weight back as fn.name because all sorts of
         # things may assume that it exists, e.g., when initializing weights.
         # However, we can't directly assign as it could be an nn.Parameter and
         # gets added as a parameter. Instead, we register weight.data as a
         # buffer, which will cause weight to be included in the state dict
         # and also supports nn.init due to shared storage.
-        module.register_buffer(fn.name, weight.data)
         module.register_buffer(fn.name + "_u", u)
 
         if fn.mode.startswith("learn"):
             alpha = weight.new_empty(()).fill_(1.0)
             module.register_parameter(fn.name + "_alpha", torch.nn.Parameter(alpha))
         module.register_forward_pre_hook(fn)
+        return fn
 
     def init_ux(self, module, inputs):
         if getattr(module, self.name + "_ux") is None:
@@ -281,7 +279,8 @@ class SmartSpectralNorm(SpectralNorm):
             weight_mat = weight_mat.permute(
                 self.dim, *[d for d in range(weight_mat.dim()) if d != self.dim]
             )
-
+        height = weight_mat.size(0)
+        weight_mat = weight_mat.reshape(height, -1)
         weight_dense, u = self.dense.compute_weight(module)
         v = normalize(torch.matmul(weight_mat.t(), u), dim=0, eps=self.eps)
         sigma_dense = torch.dot(u, torch.matmul(weight_mat, v))

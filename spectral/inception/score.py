@@ -150,10 +150,10 @@ def preds2score(preds, splits):
 
 def _prepare_image_for_inception(images):
     images = np.asarray(images)
-    assert len(images.shape) == 3
-    assert images.shape[0] == 3
-    assert np.max(images[0]) <= 1
-    assert np.min(images[0]) >= 0
+    assert len(images.shape) == 3, images.shape
+    assert images.shape[0] == 3, images.shape[0]
+    assert np.max(images[0]) <= 1, np.max(images[0])
+    assert np.min(images[0]) >= 0, np.min(images[0])
     return (images - 0.5) * 2.0
 
 
