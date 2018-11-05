@@ -1,0 +1,19 @@
+HOST = 'fill in'
+DEST_PATH = 'fill in'
+
+.PHONY: sync-samsung
+sync-samsung:
+	rsync -r --exclude-from='.gitignore' --exclude='.git' -v ./ ${HOST}:${DEST_PATH}
+
+.PHONY: lint
+lint:
+	pylint spectral
+
+.PHONY: tests
+tests:
+	pytest tests
+
+.PHONY: install
+install:
+	pip install -Ue . --process-dependency-links
+	pip install -Ur requirements-dev.txt

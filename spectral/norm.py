@@ -49,7 +49,7 @@ class ConvSpectralNorm(SpectralNorm):
     def remove(self, module):
         weight = getattr(module, self.name)
         delattr(module, self.name)
-        delattr(module, self.name + "_u")
+        delattr(module, self.name + "_ux")
         delattr(module, self.name + "_orig")
         module.register_parameter(self.name, torch.nn.Parameter(weight))
 

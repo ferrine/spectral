@@ -5,11 +5,11 @@ import re
 
 def get_version():
     version_regex = re.compile(r"^__version__ = ['\"]([^'\"]*)['\"]")
-    for line in pathlib.Path('invgan', '__init__.py').open('rt').readlines():
+    for line in pathlib.Path('spectral', '__init__.py').open('rt').readlines():
         mo = version_regex.match(line)
         if mo:
             return mo.group(1)
-    raise RuntimeError('Unable to find version in %s.' % ('invgan/__init__',))
+    raise RuntimeError('Unable to find version in %s.' % ('spectral/__init__',))
 
 
 def install_deps():
