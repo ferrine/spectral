@@ -337,3 +337,24 @@ class SmartSpectralNorm(SpectralNorm):
         else:
             r_g = getattr(module, self.name + "_orig").requires_grad
             getattr(module, self.name).detach_().requires_grad_(r_g)
+
+
+def correlation_penalty(weight, dim=0):
+    if dim != 0:
+        # permute dim to front
+        weight = weight.permute(
+            dim, *[d for d in range(weight.dim()) if d != dim]
+        )
+    weight = weight.view(weight.shape[0], -1)
+    wtw = weight.t() @ weight
+    idiag = 1/torch.diag(wtw)**.5
+    normwtw = wtw * idiag[None] * idiag[:, None]
+    cost = normwtw.pow(2).mean() - 1/normwtw.shape[0]
+    return cost
+
+
+def correlation_regularization(weights, dim=0):
+    result = 0
+    for weight in weights:
+        result += correlation_penalty(weight, dim=dim)
+    return result

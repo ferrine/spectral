@@ -39,6 +39,7 @@ parser.add_argument("--cuda", type=bool, default=True)
 parser.add_argument("--lrd", type=float, default=1e-4)
 parser.add_argument("--lrg", type=float, default=1e-4)
 parser.add_argument("--num_d", type=int, default=3)
+parser.add_argument("--corr_reg", type=float, default=0)
 
 
 class Main(object):
@@ -117,14 +118,29 @@ class Main(object):
     def run_iteration(self, info=None):
         if info is None:
             info = spectral.logging.StreamingMeans()
+        if self.args.corr_reg > 0:
+            corr_reg_params = [
+                param for k, param in
+                self.discriminator.named_parameters()
+                if k.replace('_orig', '').endswith('weight')
+            ]
+        else:
+            corr_reg_params = []
         t0 = time.time()
         self.gan.train()
         for _ in range(self.args.num_d):
             self.opt_d.zero_grad()
             dloss = self.gan.discriminator_loss(next(self.reals), next(self.fakes))
+            dlossitem = dloss.item()
+            if corr_reg_params:
+                corr_penalty = spectral.norm.correlation_regularization(corr_reg_params) * self.args.corr_reg
+                dloss += corr_penalty
+                corr_penalty = corr_penalty.item()
+            else:
+                corr_penalty = 0
             dloss.backward()
             self.opt_d.step()
-            info.update(dloss=dloss.item())
+            info.update(dloss_total=dlossitem+corr_penalty, dloss=dlossitem, corr_penalty=corr_penalty)
 
         self.opt_g.zero_grad()
         gloss = self.gan.generator_loss(next(self.rfakes))
