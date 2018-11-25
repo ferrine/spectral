@@ -265,43 +265,6 @@ class GeneratorDataset(torch.utils.data.Dataset):
             raise IndexError(item)
 
 
-class ReconstructionDataset(torch.utils.data.Dataset):
-    def __init__(
-        self,
-        source,
-        encoder,
-        generator,
-        return_pair=False,
-        device="cuda",
-        transform=None,
-    ):
-        self.source = source
-        self.encoder = encoder.to(device).eval()
-        self.generator = generator.to(device).eval()
-        self.return_pair = return_pair
-        self.transform = transform
-        self.normalize = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-
-    def __getitem__(self, item):
-        with torch.no_grad():
-            device = next(self.encoder.parameters()).device
-            image = self.source[item]
-            z, _ = self.encoder.encode(
-                self.normalize(image.clone())[None, :].to(device)
-            )
-            recon = self.generator(z)[0]
-            recon = spectral.utils.to_image_range(recon)
-            if self.transform:
-                recon = self.transform(recon)
-            if self.return_pair:
-                return image.to(device), recon
-            else:
-                return recon
-
-    def __len__(self):
-        return len(self.source)
-
-
 def endless(loader):
     while True:
         for item in loader:
