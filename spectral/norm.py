@@ -155,6 +155,7 @@ def conv_power_iteration_sigma(
     padding=0,
     dilation=1,
     groups=1,
+    return_u=False,
 ):
     if (u is None) ^ (u_shape is None):
         if u is not None:
@@ -168,12 +169,17 @@ def conv_power_iteration_sigma(
         else:
             raise ValueError("need one of u or u_shape")
     for _ in range(iterations):
-        u, v = conv_power_iteration(
+        uh, v = conv_power_iteration(
             kernel, u, stride=stride, padding=padding, dilation=dilation, groups=groups
         )
-    return conv_sigma(
+        u = uh
+    sigma = conv_sigma(
         kernel, u, v, stride=stride, padding=padding, dilation=dilation, groups=groups
     )
+    if return_u:
+        return sigma, u
+    else:
+        return sigma
 
 
 def spectral_norm(module, name="weight", n_power_iterations=1, eps=1e-12, dim=None):
@@ -342,14 +348,12 @@ class SmartSpectralNorm(SpectralNorm):
 def correlation_penalty(weight, dim=0):
     if dim != 0:
         # permute dim to front
-        weight = weight.permute(
-            dim, *[d for d in range(weight.dim()) if d != dim]
-        )
+        weight = weight.permute(dim, *[d for d in range(weight.dim()) if d != dim])
     weight = weight.view(weight.shape[0], -1)
     wtw = weight.t() @ weight
-    idiag = 1/torch.diag(wtw)**.5
+    idiag = 1 / torch.diag(wtw) ** 0.5
     normwtw = wtw * idiag[None] * idiag[:, None]
-    cost = normwtw.pow(2).mean() - 1/normwtw.shape[0]
+    cost = normwtw.pow(2).mean() - 1 / normwtw.shape[0]
     return cost
 
 
