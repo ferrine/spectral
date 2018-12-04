@@ -1,7 +1,9 @@
 import torch.nn as nn
+import torch
 import numpy as np
 import spectral
 import spectral.norm
+import geoopt
 
 
 def conv_arithmetic(sin, pad, out_pad, stride, kernel):
@@ -293,3 +295,31 @@ class DataParallelWrap(nn.DataParallel):
                         + super().__getattr__("module").__class__.__name__,
                     )
                 ) from e
+
+
+class OrthConv2d(nn.Conv2d):
+    def __init__(self, *args, alpha=None, **kwargs):
+        self._weight = None
+        self._weight_shape = None
+        super().__init__(*args, **kwargs)
+        if alpha is None:
+            self._alpha = nn.Parameter(torch.ones(self._weight_shape[0]))
+        else:
+            self._alpha = alpha
+
+    @property
+    def weight(self):
+        return (self.alpha[:, None] * self._weight).reshape(self._weight_shape)
+
+    @property
+    def alpha(self):
+        return self._alpha.exp()
+
+    @weight.setter
+    def weight(self, value):
+        self._weight_shape = value.shape
+        self._weight = geoopt.ManifoldParameter(
+            value.data.reshape(value.shape[0], -1),
+            manifold=geoopt.Stiefel()
+        )
+        self._weight.proj_()

@@ -5,10 +5,12 @@ import itertools
 import csv
 import time
 import tabulate
-# import inception.score first
-import inception.score
+
+# import spectral first
+import spectral.inception.score
 import spectral
 import torch
+import geoopt
 import torchvision.utils
 import scipy.misc
 import exman
@@ -39,6 +41,7 @@ parser.add_argument("--lrd", type=float, default=1e-4)
 parser.add_argument("--lrg", type=float, default=1e-4)
 parser.add_argument("--num_d", type=int, default=3)
 parser.add_argument("--corr_reg", type=float, default=0)
+parser.add_argument("--amsgrad", type=bool, default=False)
 parser.add_argument("--orth_reg", type=float, default=0)
 parser.add_argument("--d_fc_in_k", type=float, default=1)
 
@@ -73,11 +76,13 @@ class Main(object):
             self.generator, self.discriminator
         )
         self.gan.to(self.device)
-        self.opt_d = torch.optim.Adam(
-            self.discriminator.parameters(), betas=(0.5, 0.99), lr=self.args.lrd
+        self.opt_d = geoopt.optim.RiemannianAdam(
+            self.discriminator.parameters(), betas=(0.5, 0.99), lr=self.args.lrd,
+            amsgrad=args.amsgrad
         )
         self.opt_g = torch.optim.Adam(
-            self.generator.parameters(), betas=(0.5, 0.99), lr=self.args.lrg
+            self.generator.parameters(), betas=(0.5, 0.99), lr=self.args.lrg,
+            amsgrad=args.amsgrad
         )
         self._csv_created = False
         self._csv_fields = None
