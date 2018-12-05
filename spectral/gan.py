@@ -1,5 +1,6 @@
 import torch
 
+
 class GAN(torch.nn.Module):
     def __init__(self, generator, discriminator):
         super().__init__()

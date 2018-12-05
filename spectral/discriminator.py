@@ -41,7 +41,13 @@ class BaseImageDiscriminator(BaseDiscriminator):
 
 class DCV2ImageDiscriminator(BaseImageDiscriminator):
     def __init__(
-        self, input_shape, fc_in=128, d_fc_in_k=1, wasserstein=False, init=None, **kwargs
+        self,
+        input_shape,
+        fc_in=128,
+        d_fc_in_k=1,
+        wasserstein=False,
+        init=None,
+        **kwargs
     ):
         fc_in = int(fc_in * 4 * d_fc_in_k)
         c, h, w = input_shape
