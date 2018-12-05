@@ -1,6 +1,6 @@
+import spectral
 import torch.nn as nn
 import torch
-import spectral
 
 
 class BaseGenerator(nn.Module):

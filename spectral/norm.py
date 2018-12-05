@@ -362,3 +362,18 @@ def correlation_regularization(weights, dim=0):
     for weight in weights:
         result += correlation_penalty(weight, dim=dim)
     return result
+
+def orthogonality_penalty(weight):
+    shape = weight.shape[0]
+    W = torch.reshape(weight, (shape, -1))
+    cost = torch.norm(
+        W @ W.t() - torch.eye(shape, device=W.device)
+    )
+    return cost
+
+def orthogonality_regularization(weights):
+    result = 0
+    for weight in weights:
+        result += orthogonality_penalty(weight)
+    return result
+
