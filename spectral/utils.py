@@ -1,6 +1,7 @@
 import collections
 from torch import nn as nn
 import itertools
+import torch
 
 
 def _ntuple(n):
@@ -28,6 +29,27 @@ def isfloat(s):
     except ValueError:
         return False
     return True
+
+
+def spectrum(n, tau, eps, sigma):
+    """
+
+    Parameters
+    ----------
+    n : grid size
+    tau : curvature
+        for tau = 0, spectrum is constant and equal to sigma,
+        for 0 < tau < 1 it is concave,
+        for tau > 1, convex
+    eps
+    sigma
+
+    Returns
+    -------
+
+    """
+    grid = torch.linspace(0, 1, n) ** tau
+    return (1-grid) * eps + grid * sigma
 
 
 def is_conv(mod):

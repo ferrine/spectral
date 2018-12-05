@@ -259,6 +259,15 @@ def conv2d(
     return module
 
 
+def stiefel_conv2d(
+    *args,
+    alpha=None,
+    **kwargs
+):
+    module = OrthConv2d(*args, **kwargs, alpha=alpha)
+    return module
+
+
 def linear(*args, spectral_norm=False, init="normal", nonlin="relu", **kwargs):
     module = nn.Linear(*args, **kwargs)
     if init == "normal":

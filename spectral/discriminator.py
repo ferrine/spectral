@@ -91,7 +91,7 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
             spectral.nets.conv2d(
                 in_channels=fc_in // 1,
                 out_channels=fc_in // 1,
-                spectral_norm=self.spectral_norm,
+                spectral_norm=True,  # this will be inactive if mode='', so ok
                 spectral_norm_kwargs=self.spectral_norm_kwargs,
                 kernel_size=3,
                 stride=1,
@@ -125,7 +125,7 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
             spectral.nets.conv2d(
                 in_channels=channels[0],
                 out_channels=channels[1],
-                spectral_norm=self.spectral_norm,
+                spectral_norm=True,  # this will be inactive if mode='', so ok
                 spectral_norm_kwargs=self.spectral_norm_kwargs,
                 kernel_size=3,
                 stride=1,
@@ -139,7 +139,7 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
             spectral.nets.conv2d(
                 in_channels=channels[1],
                 out_channels=channels[2],
-                spectral_norm=self.spectral_norm,
+                spectral_norm=True,  # this will be inactive if mode='', so ok
                 spectral_norm_kwargs=self.spectral_norm_kwargs,
                 kernel_size=4,
                 stride=2,
