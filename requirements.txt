@@ -10,4 +10,5 @@ scipy
 sklearn
 joblib
 tqdm
+git+https://github.com/ferrine/geoopt.git#egg=geoopt
 git+https://github.com/ferrine/exman.git#egg=exman

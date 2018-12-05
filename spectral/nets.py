@@ -302,24 +302,22 @@ class OrthConv2d(nn.Conv2d):
         self._weight = None
         self._weight_shape = None
         super().__init__(*args, **kwargs)
+        weight = self._parameters.pop('weight')
+        self._weight_shape = weight.shape
+        self.weight_orig = geoopt.ManifoldParameter(
+            weight.data.reshape(weight.shape[0], -1),
+            manifold=geoopt.Stiefel()
+        )
+        self.weight_orig.proj_()
         if alpha is None:
-            self._alpha = nn.Parameter(torch.ones(self._weight_shape[0]))
+            self.alpha_orig = nn.Parameter(torch.zeros(self._weight_shape[0]))
         else:
-            self._alpha = alpha
+            self.alpha_orig = alpha
 
     @property
     def weight(self):
-        return (self.alpha[:, None] * self._weight).reshape(self._weight_shape)
+        return (self.alpha[:, None] * self.weight_orig).reshape(self._weight_shape)
 
     @property
     def alpha(self):
-        return self._alpha.exp()
-
-    @weight.setter
-    def weight(self, value):
-        self._weight_shape = value.shape
-        self._weight = geoopt.ManifoldParameter(
-            value.data.reshape(value.shape[0], -1),
-            manifold=geoopt.Stiefel()
-        )
-        self._weight.proj_()
+        return self.alpha_orig.exp()
