@@ -1,4 +1,5 @@
 import collections
+from torch import nn as nn
 import itertools
 
 
@@ -27,3 +28,16 @@ def isfloat(s):
     except ValueError:
         return False
     return True
+
+def is_conv(mod):
+    return isinstance(
+        mod,
+        (
+            nn.Conv1d,
+            nn.Conv2d,
+            nn.Conv3d,
+            nn.ConvTranspose1d,
+            nn.ConvTranspose2d,
+            nn.ConvTranspose3d,
+        ),
+    )

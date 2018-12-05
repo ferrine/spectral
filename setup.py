@@ -5,11 +5,11 @@ import re
 
 def get_version():
     version_regex = re.compile(r"^__version__ = ['\"]([^'\"]*)['\"]")
-    for line in pathlib.Path('spectral', '__init__.py').open('rt').readlines():
+    for line in pathlib.Path("spectral", "__init__.py").open("rt").readlines():
         mo = version_regex.match(line)
         if mo:
             return mo.group(1)
-    raise RuntimeError('Unable to find version in %s.' % ('spectral/__init__',))
+    raise RuntimeError("Unable to find version in %s." % ("spectral/__init__",))
 
 
 def install_deps():
@@ -32,25 +32,25 @@ def install_deps():
     Returns:
          list of packages and dependency links.
     """
-    default = open('requirements.txt', 'r').readlines()
+    default = open("requirements.txt", "r").readlines()
     new_pkgs = []
     links = []
     for resource in default:
-        if 'git+' in resource:
-            pkg = resource.split('#')[-1]
-            links.append(resource.strip() + '-9876543210')
-            new_pkgs.append(pkg.replace('egg=', '').rstrip())
+        if "git+" in resource:
+            pkg = resource.split("#")[-1]
+            links.append(resource.strip() + "-9876543210")
+            new_pkgs.append(pkg.replace("egg=", "").rstrip())
         else:
             new_pkgs.append(resource.strip())
     return dict(install_requires=new_pkgs, dependency_links=links)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     setup(
-        name='spectral',
-        author='Max Kochurov',
+        name="spectral",
+        author="Max Kochurov",
         version=get_version(),
         packages=find_packages(),
-        author_email='maxim.v.kochurov@gmail.com',
+        author_email="maxim.v.kochurov@gmail.com",
         **install_deps(),
     )

@@ -1,6 +1,5 @@
 import torch
 
-
 class GAN(torch.nn.Module):
     def __init__(self, generator, discriminator):
         super().__init__()
@@ -32,6 +31,7 @@ class GAN(torch.nn.Module):
             fake_loss = fake_discrimination.mean()
             real_loss = -real_discrimination.mean()
             loss = fake_loss + real_loss
+
         return loss
 
     def generator_loss(self, x_fake):

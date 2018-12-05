@@ -5,7 +5,6 @@ import itertools
 import csv
 import time
 import tabulate
-
 # import spectral first
 import spectral.inception.score
 import spectral
@@ -40,7 +39,8 @@ parser.add_argument("--lrd", type=float, default=1e-4)
 parser.add_argument("--lrg", type=float, default=1e-4)
 parser.add_argument("--num_d", type=int, default=3)
 parser.add_argument("--corr_reg", type=float, default=0)
-
+parser.add_argument("--orth_reg", type=float, default=0)
+parser.add_argument("--d_fc_in_k", type=float, default=1)
 
 class Main(object):
     def __init__(self, args):
@@ -48,8 +48,11 @@ class Main(object):
             args.data_root, args.dataset, batch_size=args.batch_size
         )
         image = self.loader.dataset[0]
+
+        self.args = args
         self.discriminator = spectral.discriminator.DCV2ImageDiscriminator(
             wasserstein=args.wasserstein,
+            d_fc_in_k=self.args.d_fc_in_k,
             spectral_norm_kwargs=dict(mode=args.mode, strict=args.sn_strict),
             input_shape=image.shape,
         )
@@ -57,7 +60,6 @@ class Main(object):
             input_shape=(args.latent,), output_shape=image.shape
         )
 
-        self.args = args
 
         def _fakes(reparametrize):
             while True:
@@ -67,7 +69,9 @@ class Main(object):
         self.rfakes = map(self.to, _fakes(True))
         self.reals = map(self.to, spectral.datasets.endless(self.loader))
 
-        self.gan = spectral.gan.GAN(self.generator, self.discriminator)
+        self.gan = spectral.gan.GAN(
+            self.generator, self.discriminator
+        )
         self.gan.to(self.device)
         self.opt_d = torch.optim.Adam(
             self.discriminator.parameters(), betas=(0.5, 0.99), lr=self.args.lrd
@@ -115,32 +119,52 @@ class Main(object):
     def device(self):
         return "cuda" if self.args.cuda else "cpu"
 
+    def regularization(self, corr_reg=False, orth_reg=False):
+        reg_params = [
+            mod.weight
+            for mod in self.discriminator.modules()
+            if spectral.utils.is_conv(mod)
+        ]
+        loss = 0
+        if corr_reg:
+            corr_penalty = (spectral.norm.correlation_regularization(reg_params) * self.args.corr_reg)
+            loss += corr_penalty
+            corr_penalty = corr_penalty.item()
+        else:
+            corr_penalty = 0
+
+        if orth_reg:
+            orth_penalty = spectral.norm.orthogonality_regularization(reg_params) * self.args.orth_reg
+            loss += orth_penalty
+            orth_penalsty = orth_penalty.item()
+        else:
+            orth_penalty = 0
+        return loss, corr_penalty, orth_penalty
+
     def run_iteration(self, info=None):
+        orth_reg = self.args.orth_reg > 0
+        corr_reg = self.args.corr_reg > 0
+
         if info is None:
             info = spectral.logging.StreamingMeans()
-        if self.args.corr_reg > 0:
-            corr_reg_params = [
-                param for k, param in
-                self.discriminator.named_parameters()
-                if k.replace('_orig', '').endswith('weight')
-            ]
-        else:
-            corr_reg_params = []
+
         t0 = time.time()
         self.gan.train()
         for _ in range(self.args.num_d):
             self.opt_d.zero_grad()
             dloss = self.gan.discriminator_loss(next(self.reals), next(self.fakes))
             dlossitem = dloss.item()
-            if corr_reg_params:
-                corr_penalty = spectral.norm.correlation_regularization(corr_reg_params) * self.args.corr_reg
-                dloss += corr_penalty
-                corr_penalty = corr_penalty.item()
-            else:
-                corr_penalty = 0
+
+            add_loss, corr_penalty, orth_penalty = self.regularization(corr_reg=corr_reg, orth_reg=orth_reg)
+            dloss += add_loss
             dloss.backward()
             self.opt_d.step()
-            info.update(dloss_total=dlossitem+corr_penalty, dloss=dlossitem, corr_penalty=corr_penalty)
+            info.update(
+                dloss_total=dlossitem + corr_penalty + orth_penalty,
+                dloss=dlossitem,
+                corr_penalty=corr_penalty,
+                orth_penalty=orth_penalty,
+            )
 
         self.opt_g.zero_grad()
         gloss = self.gan.generator_loss(next(self.rfakes))
@@ -188,6 +212,7 @@ class Main(object):
             if i % self.args.save_every == 0:
                 self.save_models(i)
                 self.log_pictures(i)
+
 
     def log_evaluate(self, it):
         inception_score = self.evaluate(self.args.eval_sample)
