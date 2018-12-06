@@ -136,7 +136,7 @@ class Main(object):
         if orth_reg:
             orth_penalty = spectral.norm.orthogonality_regularization(reg_params) * self.args.orth_reg
             loss += orth_penalty
-            orth_penalsty = orth_penalty.item()
+            orth_penalty = orth_penalty.item()
         else:
             orth_penalty = 0
         return loss, corr_penalty, orth_penalty
