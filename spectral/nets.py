@@ -308,8 +308,6 @@ class DataParallelWrap(nn.DataParallel):
 
 class OrthConv2d(nn.Conv2d):
     def __init__(self, *args, alpha=None, **kwargs):
-        self._weight = None
-        self._weight_shape = None
         super().__init__(*args, **kwargs)
         weight = self._parameters.pop("weight")
         self._weight_shape = weight.shape
