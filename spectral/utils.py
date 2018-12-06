@@ -31,25 +31,53 @@ def isfloat(s):
     return True
 
 
-def spectrum(n, tau, eps, sigma):
+class Spectrum(nn.Module):
     """
 
     Parameters
     ----------
-    n : grid size
     tau : curvature
         for tau = 0, spectrum is constant and equal to sigma,
         for 0 < tau < 1 it is concave,
+        for tau = 1 it is linear
         for tau > 1, convex
-    eps
-    sigma
-
-    Returns
-    -------
-
+    eps : minimum singular value
+    sigma : maximum singular value
     """
-    grid = torch.linspace(0, 1, n) ** tau
-    return (1-grid) * eps + grid * sigma
+
+    def __init__(self, tau, eps, sigma, tau_cast=None, eps_cast=None, sigma_cast=None):
+        super().__init__()
+        self._tau = tau
+        self._eps = eps
+        self._sigma = sigma
+        self.tau_cast = tau_cast
+        self.eps_cast = eps_cast
+        self.sigma_cast = sigma_cast
+
+    def forward(self, n):
+        grid = torch.linspace(0, 1, n) ** self.tau
+        return (1 - grid) * self.eps + grid * self.sigma
+
+    @property
+    def tau(self):
+        tau = self._tau
+        if self.tau_cast is not None:
+            tau = self.tau_cast(tau)
+        return tau
+
+    @property
+    def eps(self):
+        eps = self._eps
+        if self.tau_cast is not None:
+            eps = self.tau_cast(eps)
+        return eps
+
+    @property
+    def sigma(self):
+        sigma = self._sigma
+        if self.tau_cast is not None:
+            sigma = self.tau_cast(sigma)
+        return sigma
 
 
 def is_conv(mod):

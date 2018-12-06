@@ -259,11 +259,7 @@ def conv2d(
     return module
 
 
-def stiefel_conv2d(
-    *args,
-    alpha=None,
-    **kwargs
-):
+def stiefel_conv2d(*args, alpha=None, **kwargs):
     module = OrthConv2d(*args, **kwargs, alpha=alpha)
     return module
 
@@ -307,7 +303,7 @@ class DataParallelWrap(nn.DataParallel):
 
 
 class OrthConv2d(nn.Conv2d):
-    def __init__(self, *args, alpha=None, **kwargs):
+    def __init__(self, *args, alpha=None, alpha_cast=None, **kwargs):
         super().__init__(*args, **kwargs)
         weight = self._parameters.pop("weight")
         self._weight_shape = weight.shape
@@ -317,8 +313,14 @@ class OrthConv2d(nn.Conv2d):
         self.weight_orig.proj_()
         if alpha is None:
             self.alpha_orig = nn.Parameter(torch.zeros(self._weight_shape[0]))
+            if alpha_cast is not None:
+                raise ValueError(
+                    "Cant set cast if alpha is trainable parameter specified in OrthConv"
+                )
+            self.alpha_cast = torch.exp
         else:
             self.alpha_orig = alpha
+            self.alpha_cast = alpha_cast
 
     @property
     def weight(self):
@@ -326,4 +328,7 @@ class OrthConv2d(nn.Conv2d):
 
     @property
     def alpha(self):
-        return self.alpha_orig.exp()
+        alpha = self.alpha_orig
+        if self.alpha_cast is not None:
+            alpha = self.alpha_cast(alpha)
+        return alpha
