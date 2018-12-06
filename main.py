@@ -5,8 +5,8 @@ import itertools
 import csv
 import time
 import tabulate
-# import spectral first
-import spectral.inception.score
+# import inception.score first
+import inception.score
 import spectral
 import torch
 import torchvision.utils
@@ -42,6 +42,7 @@ parser.add_argument("--corr_reg", type=float, default=0)
 parser.add_argument("--orth_reg", type=float, default=0)
 parser.add_argument("--d_fc_in_k", type=float, default=1)
 
+
 class Main(object):
     def __init__(self, args):
         self.loader = spectral.datasets.dataloader(
@@ -59,7 +60,6 @@ class Main(object):
         self.generator = spectral.generator.DCV2ImageGenerator(
             input_shape=(args.latent,), output_shape=image.shape
         )
-
 
         def _fakes(reparametrize):
             while True:
@@ -182,14 +182,12 @@ class Main(object):
         torch.save(self.discriminator.state_dict(), dpath)
 
     def evaluate(self, n):
-        import spectral.inception.score
-
         self.gan.eval()
         examples = itertools.chain.from_iterable(self.fakes)
         examples = itertools.islice(examples, n)
         examples = map(spectral.utils.to_image_range, examples)
         examples = map(self.numpy, examples)
-        inception_score = spectral.inception.score.calculate_inception_score(examples)
+        inception_score = inception.score.calculate_inception_score(examples)
         return inception_score
 
     def train(self):
@@ -212,7 +210,6 @@ class Main(object):
             if i % self.args.save_every == 0:
                 self.save_models(i)
                 self.log_pictures(i)
-
 
     def log_evaluate(self, it):
         inception_score = self.evaluate(self.args.eval_sample)

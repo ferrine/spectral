@@ -298,3 +298,9 @@ def calculate_frechet_distance_from_mu_cov(mu1, sigma1, mu2, sigma2, eps=1e-6):
     tr_covmean = np.trace(covmean)
 
     return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
+
+
+print('Running test batch for inception: ', end='')
+with _inception_session.as_default():
+    inception_logits.eval({inception_images: np.random.randn(1, 3, 32, 32)})
+print('OK')
