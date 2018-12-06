@@ -7,7 +7,7 @@ import time
 import tabulate
 
 # import spectral first
-import spectral.inception.score
+import inception.score
 import spectral
 import torch
 import geoopt
