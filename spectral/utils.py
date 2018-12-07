@@ -3,6 +3,7 @@ from torch import nn as nn
 import itertools
 import torch
 import torch.nn.functional
+import abc
 
 
 def _ntuple(n):
@@ -32,38 +33,19 @@ def isfloat(s):
     return True
 
 
-class Spectrum(nn.Module):
+class Spectrum(nn.Module, metaclass=abc.ABCMeta):
     """
 
     Parameters
     ----------
-    tau : curvature
-        for tau = 0, spectrum is constant and equal to sigma,
-        for 0 < tau < 1 it is concave,
-        for tau = 1 it is linear
-        for tau > 1, convex
-        None is learnable curvature
     eps : minimum singular value, None is for learnable
     sigma : maximum singular value, None is for learnable
     """
 
-    def __init__(
-        self,
-        tau=None,
-        eps=None,
-        sigma=None,
-        tau_cast=None,
-        eps_cast=None,
-        sigma_cast=None,
-    ):
+    __formula_shortcuts = {}
+
+    def __init__(self, eps=None, sigma=None, eps_cast=None, sigma_cast=None):
         super().__init__()
-        if tau is not None:
-            self._tau = tau
-            self.tau_cast = tau_cast
-        else:
-            self._tau = nn.Parameter(torch.tensor(0))
-            assert tau_cast is None
-            self.tau_cast = torch.exp
         if eps is not None:
             self._eps = eps
             self.eps_cast = eps_cast
@@ -79,7 +61,7 @@ class Spectrum(nn.Module):
             self.sigma_cast = torch.exp
 
     def forward(self, n):
-        grid = torch.linspace(0, 1, n) ** self.tau
+        grid = self.grid(n)
         # there are parametrization issues if some parameters are learnable
         # we have to manually fix them
         if isinstance(self._eps, nn.Parameter) or isinstance(self._sigma, nn.Parameter):
@@ -106,13 +88,6 @@ class Spectrum(nn.Module):
         return (1 - grid) * eps + grid * sigma
 
     @property
-    def tau(self):
-        tau = self._tau
-        if self.tau_cast is not None:
-            tau = self.tau_cast(tau)
-        return tau
-
-    @property
     def eps(self):
         eps = self._eps
         if self.eps_cast is not None:
@@ -125,6 +100,76 @@ class Spectrum(nn.Module):
         if self.sigma_cast is not None:
             sigma = self.sigma_cast(sigma)
         return sigma
+
+    @abc.abstractmethod
+    def grid(self, n):
+        raise NotImplementedError
+
+    @classmethod
+    def from_formula(cls, formula):
+        name, formula = formula.split(":", 1)
+        subcls = cls.__formula_shortcuts[name]
+        return subcls.from_formula(formula)
+
+    @classmethod
+    def register_for_formula(cls, *names):
+        def wrap(subls):
+            if not issubclass(subls, cls):
+                raise TypeError(
+                    subls, "the wrapped object is not a subclass of {}".format(cls)
+                )
+            for name in names:
+                if name in cls.__formula_shortcuts:
+                    raise ValueError(name, "the name is already taken")
+                cls.__formula_shortcuts[name] = subls
+            return subls
+
+        return wrap
+
+
+@Spectrum.register_for_formula("c", "curve")
+class CurveSpectrum(Spectrum):
+    """
+
+    Parameters
+    ----------
+    tau : curvature
+        for tau = 0, spectrum is constant and equal to sigma,
+        for 0 < tau < 1 it is concave,
+        for tau = 1 it is linear
+        for tau > 1, convex
+        None is learnable curvature
+    eps : minimum singular value, None is for learnable
+    sigma : maximum singular value, None is for learnable
+    """
+
+    def __init__(
+        self,
+        tau=None,
+        eps=None,
+        sigma=None,
+        tau_cast=None,
+        eps_cast=None,
+        sigma_cast=None,
+    ):
+        super().__init__(eps=eps, eps_cast=eps_cast, sigma=sigma, sigma_cast=sigma_cast)
+        if tau is not None:
+            self._tau = tau
+            self.tau_cast = tau_cast
+        else:
+            self._tau = nn.Parameter(torch.tensor(0))
+            assert tau_cast is None
+            self.tau_cast = torch.exp
+
+    @property
+    def tau(self):
+        tau = self._tau
+        if self.tau_cast is not None:
+            tau = self.tau_cast(tau)
+        return tau
+
+    def grid(self, n):
+        return torch.linspace(0, 1, n) ** self.tau
 
     @classmethod
     def from_formula(cls, formula):
@@ -148,6 +193,61 @@ class Spectrum(nn.Module):
         eps = "*" if isinstance(self._eps, nn.Parameter) else str(self.eps)
         sigma = "*" if isinstance(self._sigma, nn.Parameter) else str(self.sigma)
         return "{}, {}, {}".format(tau, eps, sigma)
+
+
+@Spectrum.register_for_formula("g", "grid")
+class GridSpectrum(Spectrum):
+    """
+
+    Parameters
+    ----------
+    n: size of grid
+    eps : minimum singular value, None is for learnable
+    sigma : maximum singular value, None is for learnable
+    sort: whether sort is applied
+    """
+
+    def __init__(self, n, *args, sort=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        # initialize with linear spectrum
+        linear = torch.linspace(1e-2, 1 - 1e-2, n)
+        odds = linear.exp_().sub_(1).log_()
+        self.sort = sort
+        self._tau = torch.nn.Parameter(odds)
+
+    def grid(self, n):
+        if n != len(self._tau):
+            raise ValueError(
+                n, "n is not equal to length of grid: {}".format(len(self._tau))
+            )
+        tau = torch.nn.functional.softplus(self._tau)
+        grid = tau / tau.max()
+        if self.sort:
+            grid = grid.sort()[0]
+        return grid
+
+    def extra_repr(self):
+        return "{}, sort={}".format(str(len(self._tau)), self.sort)
+
+    @classmethod
+    def from_formula(cls, formula):
+        sp_formula = formula.split(":")
+        if len(sp_formula) > 3:
+            n, eps, sigma, sort = sp_formula
+            sort = sort.lower() in {"t", "1", "true", "sort"}
+        else:
+            n, eps, sigma = sp_formula
+            sort = False
+        n = int(n)
+        if eps == "*":
+            eps = None
+        else:
+            eps = float(eps)
+        if sigma == "*":
+            sigma = None
+        else:
+            sigma = float(sigma)
+        return cls(n, eps, sigma, sort=sort)
 
 
 def is_conv(mod):

@@ -312,16 +312,14 @@ class OrthConv2d(nn.Conv2d):
         )
         self.weight_orig.proj_()
         if spectrum is None:
-            self.spectrum = spectral.utils.Spectrum()
+            self.spectrum = spectral.utils.GridSpectrum(self._weight_shape[0])
         elif isinstance(spectrum, str):
             self.spectrum = spectral.utils.Spectrum.from_formula(spectrum)
-        elif isinstance(spectrum, (list, tuple)):
-            self.spectrum = spectral.utils.Spectrum(*spectrum)
         else:
             raise TypeError(spectrum, "data type not understood")
 
     @property
     def weight(self):
-        return (
-            self.spectrum(self._weight_shape[0])[:, None] * self.weight_orig
-        ).view(*self._weight_shape)
+        return (self.spectrum(self._weight_shape[0])[:, None] * self.weight_orig).view(
+            *self._weight_shape
+        )
