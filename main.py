@@ -45,6 +45,10 @@ parser.add_argument("--amsgrad", type=bool, default=False)
 parser.add_argument("--orth_reg", type=float, default=0)
 parser.add_argument("--d_fc_in_k", type=float, default=1)
 parser.add_argument("--spectrum", type=str, default="")
+parser.register_validator(
+    lambda p: bool(p.mode) ^ bool(p.spectrum),
+    "Do not set `mode` and `spectrum` at the same time",
+)
 
 
 class Main(object):
@@ -53,12 +57,18 @@ class Main(object):
             args.data_root, args.dataset, batch_size=args.batch_size
         )
         image = self.loader.dataset[0]
-
+        if not args.spectrum:
+            sn_kwargs = dict(mode=args.mode, strict=args.sn_strict)
+            spectral_norm = bool(args.mode)
+        else:
+            sn_kwargs = spectral.utils.parse_spectrums(args.spectrum)
+            spectral_norm = True
         self.args = args
         self.discriminator = spectral.discriminator.DCV2ImageDiscriminator(
             wasserstein=args.wasserstein,
             d_fc_in_k=self.args.d_fc_in_k,
-            spectral_norm_kwargs=dict(mode=args.mode, strict=args.sn_strict),
+            spectral_norm_kwargs=sn_kwargs,
+            spectral_norm=spectral_norm,
             input_shape=image.shape,
         )
         self.generator = spectral.generator.DCV2ImageGenerator(
@@ -73,17 +83,19 @@ class Main(object):
         self.rfakes = map(self.to, _fakes(True))
         self.reals = map(self.to, spectral.datasets.endless(self.loader))
 
-        self.gan = spectral.gan.GAN(
-            self.generator, self.discriminator
-        )
+        self.gan = spectral.gan.GAN(self.generator, self.discriminator)
         self.gan.to(self.device)
         self.opt_d = geoopt.optim.RiemannianAdam(
-            self.discriminator.parameters(), betas=(0.5, 0.99), lr=self.args.lrd,
-            amsgrad=args.amsgrad
+            self.discriminator.parameters(),
+            betas=(0.5, 0.99),
+            lr=self.args.lrd,
+            amsgrad=args.amsgrad,
         )
         self.opt_g = torch.optim.Adam(
-            self.generator.parameters(), betas=(0.5, 0.99), lr=self.args.lrg,
-            amsgrad=args.amsgrad
+            self.generator.parameters(),
+            betas=(0.5, 0.99),
+            lr=self.args.lrg,
+            amsgrad=args.amsgrad,
         )
         self._csv_created = False
         self._csv_fields = None
@@ -133,14 +145,20 @@ class Main(object):
         ]
         loss = 0
         if corr_reg:
-            corr_penalty = (spectral.norm.correlation_regularization(reg_params) * self.args.corr_reg)
+            corr_penalty = (
+                spectral.norm.correlation_regularization(reg_params)
+                * self.args.corr_reg
+            )
             loss += corr_penalty
             corr_penalty = corr_penalty.item()
         else:
             corr_penalty = 0
 
         if orth_reg:
-            orth_penalty = spectral.norm.orthogonality_regularization(reg_params) * self.args.orth_reg
+            orth_penalty = (
+                spectral.norm.orthogonality_regularization(reg_params)
+                * self.args.orth_reg
+            )
             loss += orth_penalty
             orth_penalty = orth_penalty.item()
         else:
@@ -161,7 +179,9 @@ class Main(object):
             dloss = self.gan.discriminator_loss(next(self.reals), next(self.fakes))
             dlossitem = dloss.item()
 
-            add_loss, corr_penalty, orth_penalty = self.regularization(corr_reg=corr_reg, orth_reg=orth_reg)
+            add_loss, corr_penalty, orth_penalty = self.regularization(
+                corr_reg=corr_reg, orth_reg=orth_reg
+            )
             dloss += add_loss
             dloss.backward()
             self.opt_d.step()

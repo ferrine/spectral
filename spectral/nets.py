@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torch
 import numpy as np
 import spectral
 import spectral.norm
@@ -342,6 +341,12 @@ class OrthConv2d(nn.Conv2d):
         if spectrum is None:
             self.spectrum = spectral.utils.GridSpectrum(self._weight_shape[0])
         elif isinstance(spectrum, str):
+            name, formula = spectrum.split(":", 1)
+            cls = spectral.utils.Spectrum.formula_shortcuts.get(name)
+            # if cls is None: propagate error to be raised in a consistent place with better error message
+            if cls is not None and issubclass(cls, spectral.utils.GridSpectrum):
+                # we need to modify formula to make it agnostic to weight shape
+                spectrum = "{}:{}:{}".format(name, self._weight_shape[0], formula)
             self.spectrum = spectral.utils.Spectrum.from_formula(spectrum)
         else:
             raise TypeError(spectrum, "data type not understood")
