@@ -114,10 +114,7 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
                 in_channels=fc_in // 1,
                 out_channels=fc_in // 1,
                 spectral_norm=True,  # this will be inactive if mode='', so ok
-                spectral_norm_kwargs=(
-                    self.spectral_norm_kwargs[6],
-                    self.spectral_norm_kwargs[7],
-                ),
+                spectral_norm_kwargs=self.spectral_norm_kwargs[6],
                 kernel_size=3,
                 stride=1,
                 padding=1,

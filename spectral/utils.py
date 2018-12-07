@@ -265,7 +265,9 @@ def is_conv(mod):
     )
 
 
-SPECTRUM_REGEXP = re.compile(r"/(?P<begin>(?:-)?\d+)(?:-(?P<end>\d+))?/(?P<spectrum>[\w]+:[\d:.]+)")
+SPECTRUM_REGEXP = re.compile(
+    r"/(?P<begin>(?:-)?\d+)(?:-(?P<end>\d+))?/(?P<spectrum>[\w]+:[\d:.]+)"
+)
 
 
 def parse_spectrums(formulas):
@@ -274,8 +276,8 @@ def parse_spectrums(formulas):
     for begin, end, formula in SPECTRUM_REGEXP.findall(formulas):
         begin = int(begin)
         if begin == -1:
-            assert not end, 'wrong format'
-            assert not result[-1], 'duplicate default'
+            assert not end, "wrong format"
+            assert not result[-1], "duplicate default"
             result[-1] = dict(spectrum=formula)
             continue
         if end:
@@ -283,6 +285,6 @@ def parse_spectrums(formulas):
         else:
             end = begin + 1
         for i in range(begin, end):
-            assert i not in result, 'duplicate {i}'.format(i=i)
+            assert i not in result, "duplicate {i}".format(i=i)
             result[i] = dict(spectrum=formula)
     return result
