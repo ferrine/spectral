@@ -259,8 +259,8 @@ def conv2d(
     return module
 
 
-def stiefel_conv2d(*args, alpha=None, **kwargs):
-    module = OrthConv2d(*args, **kwargs, alpha=alpha)
+def stiefel_conv2d(*args, spectrum=None, **kwargs):
+    module = OrthConv2d(*args, **kwargs, spectrum=spectrum)
     return module
 
 
@@ -303,7 +303,7 @@ class DataParallelWrap(nn.DataParallel):
 
 
 class OrthConv2d(nn.Conv2d):
-    def __init__(self, *args, alpha=None, alpha_cast=None, **kwargs):
+    def __init__(self, *args, spectrum=None, **kwargs):
         super().__init__(*args, **kwargs)
         weight = self._parameters.pop("weight")
         self._weight_shape = weight.shape
@@ -311,24 +311,17 @@ class OrthConv2d(nn.Conv2d):
             weight.data.reshape(weight.shape[0], -1), manifold=geoopt.Stiefel()
         )
         self.weight_orig.proj_()
-        if alpha is None:
-            self.alpha_orig = nn.Parameter(torch.zeros(self._weight_shape[0]))
-            if alpha_cast is not None:
-                raise ValueError(
-                    "Cant set cast if alpha is trainable parameter specified in OrthConv"
-                )
-            self.alpha_cast = torch.exp
+        if spectrum is None:
+            self.spectrum = spectral.utils.Spectrum()
+        elif isinstance(spectrum, str):
+            self.spectrum = spectral.utils.Spectrum.from_formula(spectrum)
+        elif isinstance(spectrum, (list, tuple)):
+            self.spectrum = spectral.utils.Spectrum(*spectrum)
         else:
-            self.alpha_orig = alpha
-            self.alpha_cast = alpha_cast
+            raise TypeError(spectrum, "data type not understood")
 
     @property
     def weight(self):
-        return (self.alpha[:, None] * self.weight_orig).reshape(self._weight_shape)
-
-    @property
-    def alpha(self):
-        alpha = self.alpha_orig
-        if self.alpha_cast is not None:
-            alpha = self.alpha_cast(alpha)
-        return alpha
+        return (
+            self.spectrum(self._weight_shape[0])[:, None] * self.weight_orig
+        ).view(*self._weight_shape)
