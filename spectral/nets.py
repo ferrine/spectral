@@ -222,7 +222,7 @@ SPECTRAL_NORM_DEFAULTS = dict(
 )
 
 
-def conv2d(
+def regular_conv2d(
     *args,
     spectral_norm=False,
     transposed=False,
@@ -262,6 +262,34 @@ def conv2d(
 def stiefel_conv2d(*args, spectrum=None, **kwargs):
     module = OrthConv2d(*args, **kwargs, spectrum=spectrum)
     return module
+
+
+def conv2d(
+    *args,
+    spectral_norm=False,
+    transposed=False,
+    init="normal",
+    nonlin="relu",
+    spectral_norm_kwargs=None,
+    **kwargs
+):
+    if spectral_norm and spectral_norm_kwargs.get("spectrum") is not None:
+        if not transposed:
+            return stiefel_conv2d(
+                *args, spectrum=spectral_norm_kwargs.get("spectrum"), **kwargs
+            )
+        else:
+            raise NotImplementedError(
+                "Sorry, transposed stiefel conv is not yet implemented"
+            )
+    else:
+        return regular_conv2d(
+            *args,
+            init=init,
+            nonlin=nonlin,
+            spectral_norm_kwargs=spectral_norm_kwargs,
+            **kwargs
+        )
 
 
 def linear(*args, spectral_norm=False, init="normal", nonlin="relu", **kwargs):

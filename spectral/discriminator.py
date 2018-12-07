@@ -9,21 +9,17 @@ class BaseDiscriminator(nn.Module):
         wasserstein=False,
         logits=True,
         spectral_norm_kwargs=None,
+        batch_norm=False,
         **kwargs
     ):
+        if wasserstein and batch_norm:
+            raise ValueError("can't use batch norm in wasserstein mode")
         super().__init__()
         self.input_shape = self.image_shape = input_shape
         self.wasserstein = wasserstein
         self.spectral_norm_kwargs = spectral_norm_kwargs or dict()
         self.logits = logits
-
-    @property
-    def batch_norm(self):
-        return not (self.wasserstein or self.spectral_norm)
-
-    @property
-    def spectral_norm(self):
-        return bool(self.spectral_norm_kwargs.get("mode", ""))
+        self.batch_norm = batch_norm
 
 
 class BaseImageDiscriminator(BaseDiscriminator):
@@ -81,18 +77,47 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
         super().__init__(
             input_shape, fc_in=fc_in * h * w, wasserstein=wasserstein, **kwargs
         )
+        # convert spectral norm kwargs to format it easier to work with in here
+        if all(isinstance(key, int) for key in self.spectral_norm_kwargs):
+            for i in range(7):  # 7 is architecture dependent constant of conv layers!
+                self.spectral_norm_kwargs.setdefault(i, dict())
+        else:
+            defaults = self.spectral_norm_kwargs
+            self.spectral_norm_kwargs = dict()
+            for i in range(7):  # for this case we have common defaults
+                self.spectral_norm_kwargs.setdefault(i, defaults.copy())
 
         self.conv = nn.Sequential(
             self.conv_3x3_4x4s2(
-                c, fc_in // 8, fc_in // 4, bn=[False, "auto"], init=init
+                c,
+                fc_in // 8,
+                fc_in // 4,
+                bn=[False, "auto"],
+                init=init,
+                sn_kwargs=(self.spectral_norm_kwargs[0], self.spectral_norm_kwargs[1]),
             ),
-            self.conv_3x3_4x4s2(fc_in // 4, fc_in // 4, fc_in // 2, init=init),
-            self.conv_3x3_4x4s2(fc_in // 2, fc_in // 2, fc_in // 1, init=init),
+            self.conv_3x3_4x4s2(
+                fc_in // 4,
+                fc_in // 4,
+                fc_in // 2,
+                init=init,
+                sn_kwargs=(self.spectral_norm_kwargs[2], self.spectral_norm_kwargs[3]),
+            ),
+            self.conv_3x3_4x4s2(
+                fc_in // 2,
+                fc_in // 2,
+                fc_in // 1,
+                init=init,
+                sn_kwargs=(self.spectral_norm_kwargs[4], self.spectral_norm_kwargs[5]),
+            ),
             spectral.nets.conv2d(
                 in_channels=fc_in // 1,
                 out_channels=fc_in // 1,
                 spectral_norm=True,  # this will be inactive if mode='', so ok
-                spectral_norm_kwargs=self.spectral_norm_kwargs,
+                spectral_norm_kwargs=(
+                    self.spectral_norm_kwargs[6],
+                    self.spectral_norm_kwargs[7],
+                ),
                 kernel_size=3,
                 stride=1,
                 padding=1,
@@ -114,7 +139,9 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
             nn.Sigmoid() if not (wasserstein or self.logits) else nn.Sequential(),
         )
 
-    def conv_3x3_4x4s2(self, *channels, init=None, bn=("auto", "auto")):
+    def conv_3x3_4x4s2(
+        self, *channels, init=None, bn=("auto", "auto"), sn_kwargs=(None, None)
+    ):
         """
         (3x3 pad 1 stride 1) -> (4x4 pad 1 stride 2)
         """
@@ -126,7 +153,7 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
                 in_channels=channels[0],
                 out_channels=channels[1],
                 spectral_norm=True,  # this will be inactive if mode='', so ok
-                spectral_norm_kwargs=self.spectral_norm_kwargs,
+                spectral_norm_kwargs=sn_kwargs[0],
                 kernel_size=3,
                 stride=1,
                 padding=1,
@@ -140,7 +167,7 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
                 in_channels=channels[1],
                 out_channels=channels[2],
                 spectral_norm=True,  # this will be inactive if mode='', so ok
-                spectral_norm_kwargs=self.spectral_norm_kwargs,
+                spectral_norm_kwargs=sn_kwargs[1],
                 kernel_size=4,
                 stride=2,
                 padding=1,

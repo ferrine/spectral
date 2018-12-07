@@ -44,6 +44,7 @@ parser.add_argument("--corr_reg", type=float, default=0)
 parser.add_argument("--amsgrad", type=bool, default=False)
 parser.add_argument("--orth_reg", type=float, default=0)
 parser.add_argument("--d_fc_in_k", type=float, default=1)
+parser.add_argument("--spectrum", type=str, default="")
 
 
 class Main(object):
