@@ -91,6 +91,7 @@ class Main(object):
             betas=(0.5, 0.99),
             lr=self.args.lrd,
             amsgrad=args.amsgrad,
+            stabilize=1000
         )
         self.opt_g = torch.optim.Adam(
             self.generator.parameters(),
