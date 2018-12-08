@@ -51,14 +51,14 @@ class Spectrum(nn.Module, metaclass=abc.ABCMeta):
             self._eps = eps
             self.eps_cast = eps_cast
         else:
-            self._eps = nn.Parameter(torch.tensor(0))
+            self._eps = nn.Parameter(torch.tensor(0.0))
             assert eps_cast is None
             self.eps_cast = torch.exp
         if sigma is not None:
             self._sigma = sigma
             self.sigma_cast = sigma_cast
         else:
-            self._sigma = nn.Parameter(torch.tensor(0))
+            self._sigma = nn.Parameter(torch.tensor(0.0))
             self.sigma_cast = torch.exp
 
     def forward(self, n):
@@ -72,7 +72,7 @@ class Spectrum(nn.Module, metaclass=abc.ABCMeta):
                 # learnable eps, fixed sigma
                 # eps should be lower than sigma but positive
                 # the upper bound should ofc be dependent on sigma
-                eps = torch.nn.functional.sigmoid(self._eps) * self.sigma
+                eps = torch.sigmoid(self._eps) * self.sigma
                 sigma = self.sigma
             elif not isinstance(self._eps, nn.Parameter) and isinstance(
                 self._sigma, nn.Parameter
@@ -82,7 +82,7 @@ class Spectrum(nn.Module, metaclass=abc.ABCMeta):
                 sigma = eps + sigma
             else:
                 # all learnable
-                eps = torch.nn.functional.sigmoid(self._eps) * self.sigma
+                eps = torch.sigmoid(self._eps) * self.sigma
                 sigma = self.sigma
         else:
             eps, sigma = self.eps, self.sigma
@@ -158,7 +158,7 @@ class CurveSpectrum(Spectrum):
             self._tau = tau
             self.tau_cast = tau_cast
         else:
-            self._tau = nn.Parameter(torch.tensor(0))
+            self._tau = nn.Parameter(torch.tensor(0.0))
             assert tau_cast is None
             self.tau_cast = torch.exp
 
@@ -266,7 +266,7 @@ def is_conv(mod):
 
 
 SPECTRUM_REGEXP = re.compile(
-    r"/(?P<begin>(?:-)?\d+)(?:-(?P<end>\d+))?/(?P<spectrum>[\w]+:[\w\d:.\-*]+)"
+    r"/(?P<begin>(?:-)?\d+)(?:-(?P<end>\d+))?/(?P<spectrum>[\w]+:[\w\d:.\-*+]+)"
 )
 
 
@@ -278,7 +278,7 @@ def parse_spectrums(formulas):
         if begin == -1:
             assert not end, "wrong format"
             assert not result[-1], "duplicate default"
-            result[-1] = dict(spectrum=formula)
+            result[-1] = dict(spectrum=formula.replace("+", "/"))
             continue
         if end:
             end = int(end) + 1
@@ -286,5 +286,5 @@ def parse_spectrums(formulas):
             end = begin + 1
         for i in range(begin, end):
             assert i not in result, "duplicate {i}".format(i=i)
-            result[i] = dict(spectrum=formula)
+            result[i] = dict(spectrum=formula.replace("+", "/"))
     return result

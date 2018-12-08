@@ -272,20 +272,33 @@ def conv2d(
     spectral_norm_kwargs=None,
     **kwargs
 ):
-    if spectral_norm and spectral_norm_kwargs.get("spectrum") is not None:
+    if (
+            spectral_norm
+            and spectral_norm_kwargs is not None
+            and spectral_norm_kwargs.get("spectrum") is not None
+            and not spectral_norm_kwargs["spectrum"].startswith('mode:')
+    ):
         if not transposed:
             return stiefel_conv2d(
-                *args, spectrum=spectral_norm_kwargs.get("spectrum"), **kwargs
+                *args, spectrum=spectral_norm_kwargs["spectrum"], **kwargs
             )
         else:
             raise NotImplementedError(
                 "Sorry, transposed stiefel conv is not yet implemented"
             )
     else:
+        if (
+                spectral_norm_kwargs is not None
+                and spectral_norm_kwargs.get("spectrum", "").startswith('mode:')
+        ):
+            spectral_norm_kwargs = spectral_norm_kwargs.copy()
+            _, mode = spectral_norm_kwargs.pop('spectrum').split(':')
+            spectral_norm_kwargs["mode"] = mode
         return regular_conv2d(
             *args,
             init=init,
             nonlin=nonlin,
+            transposed=transposed,
             spectral_norm_kwargs=spectral_norm_kwargs,
             **kwargs
         )
@@ -335,7 +348,7 @@ class OrthConv2d(nn.Conv2d):
         weight = self._parameters.pop("weight")
         self._weight_shape = weight.shape
         self.weight_orig = geoopt.ManifoldParameter(
-            weight.data.reshape(weight.shape[0], -1), manifold=geoopt.Stiefel()
+            weight.data.reshape(weight.shape[0], -1).t(), manifold=geoopt.Stiefel()
         )
         self.weight_orig.proj_()
         if spectrum is None:
@@ -353,6 +366,8 @@ class OrthConv2d(nn.Conv2d):
 
     @property
     def weight(self):
-        return (self.spectrum(self._weight_shape[0])[:, None] * self.weight_orig).view(
-            *self._weight_shape
+        return (
+            (self.spectrum(self._weight_shape[0]) * self.weight_orig)
+            .t()
+            .view(*self._weight_shape)
         )

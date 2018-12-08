@@ -45,11 +45,11 @@ parser.add_argument("--amsgrad", type=bool, default=False)
 parser.add_argument("--orth_reg", type=float, default=0)
 parser.add_argument("--d_fc_in_k", type=float, default=1)
 parser.add_argument("--spectrum", type=str, default="")
+parser.add_argument("--cores", type=exman.optional(int), default=None)
 parser.register_validator(
     lambda p: bool(p.mode) ^ bool(p.spectrum),
     "Do not set `mode` and `spectrum` at the same time",
 )
-
 
 class Main(object):
     def __init__(self, args):
@@ -281,6 +281,8 @@ class Main(object):
 if __name__ == "__main__":
     args = parser.parse_args()
     with args.safe_experiment:
+        if args.cores is not None:
+            torch.set_num_threads(args.cores)
         main = Main(args)
         sys.stdout = spectral.logging.TeeOutput(sys.stdout, main.logs / "stdout")
         sys.stderr = spectral.logging.TeeOutput(sys.stderr, main.logs / "stderr")

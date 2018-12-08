@@ -8,9 +8,9 @@ class BaseDiscriminator(nn.Module):
         input_shape,
         wasserstein=False,
         logits=True,
-        spectral_norm=False,
         spectral_norm_kwargs=None,
         batch_norm=False,
+        spectral_norm=False,
         **kwargs
     ):
         if wasserstein and batch_norm:
@@ -21,6 +21,7 @@ class BaseDiscriminator(nn.Module):
         self.spectral_norm = spectral_norm
         self.spectral_norm_kwargs = spectral_norm_kwargs or dict()
         self.logits = logits
+        self.spectral_norm = spectral_norm
         self.batch_norm = batch_norm
 
 
@@ -82,14 +83,13 @@ class DCV2ImageDiscriminator(BaseImageDiscriminator):
         # convert spectral norm kwargs to format it easier to work with in here
         if all(isinstance(key, int) for key in self.spectral_norm_kwargs):
             defaults = self.spectral_norm_kwargs.get(-1, dict())
-            for i in range(6):  # 7 is architecture dependent constant of conv layers!
+            for i in range(7):  # 7 is architecture dependent constant of conv layers!
                 self.spectral_norm_kwargs.setdefault(i, defaults)
         else:
             defaults = self.spectral_norm_kwargs
             self.spectral_norm_kwargs = dict()
-            for i in range(
-                6
-            ):  # for this case we have common defaults, this should be a super rare case
+            # for this case we have common defaults, this should be a super rare case
+            for i in range(7):
                 self.spectral_norm_kwargs.setdefault(i, defaults.copy())
 
         self.conv = nn.Sequential(
