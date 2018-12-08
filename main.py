@@ -51,6 +51,7 @@ parser.register_validator(
     "Do not set `mode` and `spectrum` at the same time",
 )
 
+
 class Main(object):
     def __init__(self, args):
         self.loader = spectral.datasets.dataloader(

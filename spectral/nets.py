@@ -273,10 +273,10 @@ def conv2d(
     **kwargs
 ):
     if (
-            spectral_norm
-            and spectral_norm_kwargs is not None
-            and spectral_norm_kwargs.get("spectrum") is not None
-            and not spectral_norm_kwargs["spectrum"].startswith('mode:')
+        spectral_norm
+        and spectral_norm_kwargs is not None
+        and spectral_norm_kwargs.get("spectrum") is not None
+        and not spectral_norm_kwargs["spectrum"].startswith("mode:")
     ):
         if not transposed:
             return stiefel_conv2d(
@@ -287,12 +287,11 @@ def conv2d(
                 "Sorry, transposed stiefel conv is not yet implemented"
             )
     else:
-        if (
-                spectral_norm_kwargs is not None
-                and spectral_norm_kwargs.get("spectrum", "").startswith('mode:')
-        ):
+        if spectral_norm_kwargs is not None and spectral_norm_kwargs.get(
+            "spectrum", ""
+        ).startswith("mode:"):
             spectral_norm_kwargs = spectral_norm_kwargs.copy()
-            _, mode = spectral_norm_kwargs.pop('spectrum').split(':')
+            _, mode = spectral_norm_kwargs.pop("spectrum").split(":")
             spectral_norm_kwargs["mode"] = mode
         return regular_conv2d(
             *args,
