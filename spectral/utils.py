@@ -43,7 +43,7 @@ class Spectrum(nn.Module, metaclass=abc.ABCMeta):
     sigma : maximum singular value, None is for learnable
     """
 
-    formula_shortcuts = {}
+    __formula_shortcuts = {}
 
     def __init__(self, eps=None, sigma=None, eps_cast=None, sigma_cast=None):
         super().__init__()
@@ -109,7 +109,7 @@ class Spectrum(nn.Module, metaclass=abc.ABCMeta):
     @classmethod
     def from_formula(cls, formula):
         name, formula = formula.split(":", 1)
-        subcls = cls.formula_shortcuts[name]
+        subcls = cls.__formula_shortcuts[name]
         return subcls.from_formula(formula)
 
     @classmethod
@@ -120,9 +120,9 @@ class Spectrum(nn.Module, metaclass=abc.ABCMeta):
                     subls, "the wrapped object is not a subclass of {}".format(cls)
                 )
             for name in names:
-                if name in cls.formula_shortcuts:
+                if name in cls.__formula_shortcuts:
                     raise ValueError(name, "the name is already taken")
-                cls.formula_shortcuts[name] = subls
+                cls.__formula_shortcuts[name] = subls
             return subls
 
         return wrap
@@ -266,7 +266,7 @@ def is_conv(mod):
 
 
 SPECTRUM_REGEXP = re.compile(
-    r"/(?P<begin>(?:-)?\d+)(?:-(?P<end>\d+))?/(?P<spectrum>[\w]+:[\w\d:.\-*]+)"
+    r"/(?P<begin>(?:-)?\d+)(?:-(?P<end>\d+))?/(?P<spectrum>[\w]+:[\d:.]+)"
 )
 
 
