@@ -350,7 +350,7 @@ def correlation_penalty(weight, dim=0):
         # permute dim to front
         weight = weight.permute(dim, *[d for d in range(weight.dim()) if d != dim])
     weight = weight.view(weight.shape[0], -1)
-    wtw = weight @ weight.t()
+    wtw = weight.t() @ weight
     idiag = 1 / torch.diag(wtw) ** 0.5
     normwtw = wtw * idiag[None] * idiag[:, None]
     cost = normwtw.pow(2).mean() - 1 / normwtw.shape[0]
