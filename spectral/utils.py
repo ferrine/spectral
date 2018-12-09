@@ -48,14 +48,16 @@ class Spectrum(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self, eps=None, sigma=None, eps_cast=None, sigma_cast=None):
         super().__init__()
         if eps is not None:
-            self._eps = eps
+            eps = torch.as_tensor(eps, dtype=torch.float)
+            self.register_buffer('_eps', eps)
             self.eps_cast = eps_cast
         else:
             self._eps = nn.Parameter(torch.tensor(0.0))
             assert eps_cast is None
             self.eps_cast = torch.exp
         if sigma is not None:
-            self._sigma = sigma
+            sigma = torch.as_tensor(sigma, dtype=torch.float)
+            self.register_buffer('_sigma', sigma)
             self.sigma_cast = sigma_cast
         else:
             self._sigma = nn.Parameter(torch.tensor(0.0))
@@ -155,7 +157,8 @@ class CurveSpectrum(Spectrum):
     ):
         super().__init__(eps=eps, eps_cast=eps_cast, sigma=sigma, sigma_cast=sigma_cast)
         if tau is not None:
-            self._tau = tau
+            tau = torch.as_tensor(tau, dtype=torch.float)
+            self.register_buffer('_tau', tau)
             self.tau_cast = tau_cast
         else:
             self._tau = nn.Parameter(torch.tensor(0.0))
@@ -170,7 +173,7 @@ class CurveSpectrum(Spectrum):
         return tau
 
     def grid(self, n):
-        return torch.linspace(0, 1, n) ** self.tau
+        return torch.linspace(0, 1, n, device=self._tau.device) ** self.tau
 
     @classmethod
     def from_formula(cls, formula):
