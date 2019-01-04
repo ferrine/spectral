@@ -364,10 +364,28 @@ def correlation_regularization(weights, dim=0):
     return result
 
 
-def orthogonality_penalty(weight):
-    shape = weight.shape[0]
-    W = torch.reshape(weight, (shape, -1))
-    cost = torch.norm(W @ W.t() - torch.eye(shape, device=W.device))
+def orthogonality_penalty(weight, dim=0, alpha=None, sort=True):
+    if dim != 0:
+        # permute dim to front
+        weight = weight.permute(dim, *[d for d in range(weight.dim()) if d != dim])
+    weight = weight.view(weight.shape[0], -1)
+
+    wtw = weight @ weight.t()
+    if alpha is None:
+        cost = torch.norm(wtw - torch.eye(wtw.size(0), device=wtw.device))
+    else:
+        if isinstance(alpha, str):
+            alpha = spectral.utils.CurveSpectrum.from_formula(alpha).to(wtw.device)(wtw.size(0))
+        diag = torch.diag(wtw)
+        nondiag = wtw * (
+                torch.ones(wtw.size(0), wtw.size(0), device=wtw.device)
+                - torch.eye(wtw.size(0), device=wtw.device)
+        )
+        cost_orth = torch.norm(nondiag)
+        if sort:
+            diag = torch.sort(diag)[0]
+        cost_diag = torch.norm(diag-alpha)
+        cost = cost_orth + cost_diag
     return cost
 
 

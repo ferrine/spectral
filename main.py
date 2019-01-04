@@ -43,11 +43,12 @@ parser.add_argument("--num_d", type=int, default=3)
 parser.add_argument("--corr_reg", type=float, default=0)
 parser.add_argument("--amsgrad", type=bool, default=False)
 parser.add_argument("--orth_reg", type=float, default=0)
+parser.add_argument("--orth_reg_sorted", type=bool, default=True)
 parser.add_argument("--d_fc_in_k", type=float, default=1)
 parser.add_argument("--spectrum", type=str, default="")
 parser.add_argument("--cores", type=exman.optional(int), default=None)
 parser.register_validator(
-    lambda p: bool(p.mode) ^ bool(p.spectrum),
+    lambda p: not (bool(p.mode) and bool(p.spectrum)),
     "Do not set `mode` and `spectrum` at the same time",
 )
 
@@ -61,9 +62,17 @@ class Main(object):
         if not args.spectrum:
             sn_kwargs = dict(mode=args.mode, strict=args.sn_strict)
             spectral_norm = bool(args.mode)
+            orth_reg_kwargs = dict()
         else:
             sn_kwargs = spectral.utils.parse_spectrums(args.spectrum)
             spectral_norm = True
+            if args.orth_reg:
+                orth_reg_kwargs = sn_kwargs.copy()
+                sn_kwargs.clear()
+            else:
+                orth_reg_kwargs = dict()
+        print(sn_kwargs)
+        self.orth_reg_kwargs = orth_reg_kwargs
         self.args = args
         self.discriminator = spectral.discriminator.DCV2ImageDiscriminator(
             wasserstein=args.wasserstein,
@@ -72,6 +81,21 @@ class Main(object):
             spectral_norm=spectral_norm,
             input_shape=image.shape,
         )
+        self.convs_spectrum_reg = dict()
+        if self.orth_reg_kwargs:
+            counter = 0
+            for i, mod in enumerate(self.discriminator.modules()):
+                if isinstance(mod,  torch.nn.Conv2d):
+                    spectrum = self.orth_reg_kwargs.get(
+                        counter,
+                        self.orth_reg_kwargs.get(-1)
+                    )['spectrum']
+                    assert spectrum.startswith("c:")
+                    spectrum = spectral.utils.Spectrum.from_formula(spectrum)(mod.weight.size(0))
+                    if args.cuda:
+                        spectrum = spectrum.cuda()
+                    self.convs_spectrum_reg[i] = spectrum
+                    counter += 1
         self.generator = spectral.generator.DCV2ImageGenerator(
             input_shape=(args.latent,), output_shape=image.shape
         )
@@ -157,10 +181,18 @@ class Main(object):
             corr_penalty = 0
 
         if orth_reg:
-            orth_penalty = (
-                spectral.norm.orthogonality_regularization(reg_params)
-                * self.args.orth_reg
-            )
+            if not self.orth_reg_kwargs:
+                orth_penalty = (
+                    spectral.norm.orthogonality_regularization(reg_params)
+                    * self.args.orth_reg
+                )
+            else:
+                orth_penalty = 0
+                for i, mod in enumerate(self.discriminator.modules()):
+                    if i in self.convs_spectrum_reg:
+                        alpha = self.convs_spectrum_reg[i]
+                        orth_penalty += spectral.norm.orthogonality_penalty(
+                            mod.weight, alpha=alpha, sort=self.args.orth_reg_sorted)
             loss += orth_penalty
             orth_penalty = orth_penalty.item()
         else:
